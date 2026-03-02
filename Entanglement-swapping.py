@@ -1,48 +1,77 @@
-from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister, transpile
-from qiskit_aer import Aer
+from qiskit import QuantumCircuit, transpile
+from qiskit_aer import AerSimulator
 from qiskit.visualization import plot_histogram
-from qiskit.quantum_info import Statevector
 
-# 1. Setup: 4 Qubits and 2 Classical bits for the middle measurement
-qr = QuantumRegister(4, 'q')
-cr = ClassicalRegister(2, 'c_bsm')
-qc = QuantumCircuit(qr, cr)
+# Import matplotlib for displaying the plot
+import matplotlib.pyplot as plt
 
-# --- STEP 1: Create two Bell Pairs ---
-# Pair A: q0 and q1
-qc.h(qr[0])
-qc.cx(qr[0], qr[1])
 
-# Pair B: q2 and q3
-qc.h(qr[2])
-qc.cx(qr[2], qr[3])
+# -------------------------------------------------
+# 1. Create a quantum circuit with:
+#    - 3 qubits (quantum register)
+#    - 3 classical bits (for measurement results)
+# -------------------------------------------------
+qc = QuantumCircuit(3, 3)
 
-qc.barrier()
 
-# --- STEP 2: Bell State Measurement (BSM) on q1 and q2 ---
-# We transform the q1-q2 basis back to the computational basis
-qc.cx(qr[1], qr[2])
-qc.h(qr[1])
+# -------------------------------------------------
+# 2. Create an entangled Bell pair between qubit 0 and qubit 1
+#    Step 1: Apply Hadamard gate to qubit 0
+#            This creates superposition |0> → (|0> + |1>) / √2
+# -------------------------------------------------
+qc.h(0)
 
-# Measure the middle qubits
-qc.measure(qr[1], cr[0])
-qc.measure(qr[2], cr[1])
+# Step 2: Apply CNOT with qubit 0 as control and qubit 1 as target
+#         This entangles qubit 0 and qubit 1 into a Bell state
+qc.cx(0, 1)
 
-qc.barrier()
 
-# --- STEP 3: Conditional Corrections ---
-# Depending on the measurement of q1 and q2, q3 needs 
-# specific rotations to ensure it is in a perfect Bell state with q0.
-with qc.if_test((cr[0], 1)):
-    qc.z(qr[3])
-with qc.if_test((cr[1], 1)):
-    qc.x(qr[3])
+# -------------------------------------------------
+# 3. Perform Bell-state measurement preparation on qubits 1 and 2
+#    This is the key step of entanglement swapping
+# -------------------------------------------------
 
-# --- Verification ---
-# Let's see the state of the system
-backend = Aer.get_backend('statevector_simulator')
-job = backend.run(transpile(qc, backend))
-final_state = job.result().get_statevector()
+# Apply CNOT with qubit 1 as control and qubit 2 as target
+# This correlates qubit 2 with the entangled system
+qc.cx(1, 2)
 
-print("Circuit complete. The outer qubits (q0 and q3) are now entangled.")
-print(qc.draw(output='text'))
+# Apply Hadamard gate to qubit 1
+# This completes the Bell-basis transformation
+qc.h(1)
+
+
+# -------------------------------------------------
+# 4. Measure all qubits
+#    Each qubit is measured into its corresponding classical bit
+# -------------------------------------------------
+qc.measure([0, 1, 2], [0, 1, 2])
+
+
+# -------------------------------------------------
+# 5. Create the Aer simulator backend
+#    AerSimulator is the modern replacement for qiskit.Aer
+# -------------------------------------------------
+backend = AerSimulator()
+
+# Transpile the circuit to match the backend's instruction set
+qc = transpile(qc, backend)
+
+
+# -------------------------------------------------
+# 6. Run the circuit on the simulator
+#    - shots=1024 means the circuit is executed 1024 times
+# -------------------------------------------------
+result = backend.run(qc, shots=1024).result()
+
+# Retrieve measurement statistics
+counts = result.get_counts()
+
+
+# -------------------------------------------------
+# 7. Plot the measurement results
+#    The histogram shows correlated outcomes
+#    indicating successful entanglement swapping
+# -------------------------------------------------
+plot_histogram(counts)
+plt.title("Entanglement Swapping (3-Qubit Simulation)")
+plt.show()
